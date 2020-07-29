@@ -3,11 +3,15 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.schneezey</groupId>
-	<artifactId>qslv.common</artifactId>
+	<artifactId>qslv-common</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>QuickSilver Common Interface</name>
 	<description>Classes Common to all interfaces</description>
 	<properties>
+		<java.version>1.8</java.version>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+		<maven-compiler-plugin-version>3.8.1</maven-compiler-plugin-version>
 		<mockito.version>3.1.0</mockito.version>
 		<jupiter.version>5.6.2</jupiter.version>
 		<junit.runner.version>1.6.2</junit.runner.version>
@@ -83,4 +87,17 @@
 		</dependency>
 	</dependencies>
 
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${maven-compiler-plugin-version}</version> <!-- or whatever current version -->
+				<configuration>
+					<source>1.8</source>
+					<target>1.8</target>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 </project>
