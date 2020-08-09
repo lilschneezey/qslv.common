@@ -19,7 +19,7 @@ public class TraceableRequest<T> {
 	public final static String CORRELATION_ID = "correlation-id";
 	
 	// Http Header to support versioning. Don't know where else this is defined
-	public final static String ACCEPT_VERSION = "Accept-version";
+	public final static String ACCEPT_VERSION = "accept-version";
 	
 	// Option 2: provide in payload
 	private String aitId;
