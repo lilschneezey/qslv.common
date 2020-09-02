@@ -5,6 +5,13 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.context.expression.BeanFactoryResolver;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
@@ -12,8 +19,10 @@ import qslv.common.TimedResponse;
 
 @Aspect
 @Component
-public class ServiceElapsedTimeSLIAspect {
+public class ServiceElapsedTimeSLIAspect implements BeanFactoryAware {
 	private Logger log = null;
+	StandardEvaluationContext context;
+	private ExpressionParser parser = new SpelExpressionParser();
 	
 	@Around("@annotation(serviceElapsedTimeSLI)")
 	public Object logServiceElapsedTimeSLI(ProceedingJoinPoint joinPoint, ServiceElapsedTimeSLI serviceElapsedTimeSLI) throws Throwable {
@@ -24,11 +33,18 @@ public class ServiceElapsedTimeSLIAspect {
 				log = LoggerFactory.getLogger(serviceElapsedTimeSLI.logScope());
 			}
 		}
+		String ait;
+		try { 
+			ait = parser.parseExpression(serviceElapsedTimeSLI.ait()).getValue(context, String.class);
+		} catch (Throwable thrown) {
+			log.error("Parse error for \"{}\" {}", serviceElapsedTimeSLI.ait(), thrown.getMessage());
+			ait = serviceElapsedTimeSLI.ait();
+		}
 		long start = System.nanoTime();
 		Object proceed = joinPoint.proceed();
 		long elapsedTime = System.nanoTime() - start;
 		
-		ServiceLevelIndicator.logServiceElapsedTime(log, serviceElapsedTimeSLI.value(), serviceElapsedTimeSLI.ait(),  elapsedTime );
+		ServiceLevelIndicator.logServiceElapsedTime(log, serviceElapsedTimeSLI.value(), ait,  elapsedTime );
 		if (serviceElapsedTimeSLI.injectResponse()) {
 			proceed = injectElapsedTime (proceed, elapsedTime);
 		}
@@ -52,6 +68,11 @@ public class ServiceElapsedTimeSLIAspect {
 			response.setServiceTimeElapsed(elapsedTime);
 		}
 		return object;
+	}
+	@Override
+	public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
+		context = new StandardEvaluationContext(beanFactory);
+		context.setBeanResolver(new BeanFactoryResolver(beanFactory));
 	}
 
 }
