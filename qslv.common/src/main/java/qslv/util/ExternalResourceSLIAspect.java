@@ -1,5 +1,7 @@
 package qslv.util;
 
+import java.util.HashMap;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.context.expression.BeanFactoryResolver;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
@@ -20,6 +23,8 @@ public class ExternalResourceSLIAspect implements BeanFactoryAware {
 	private Logger log = null;
 	StandardEvaluationContext context;
 	private ExpressionParser parser = new SpelExpressionParser();
+	private TemplateParserContext tcontext = new TemplateParserContext();
+	HashMap<String, String> resolvedLiterals = new HashMap<>();
 
 	@Around("@annotation(externalResourceSLI)")
 	public Object remoteService(ProceedingJoinPoint joinPoint, ExternalResourceSLI externalResourceSLI) throws Throwable {
@@ -30,13 +35,7 @@ public class ExternalResourceSLIAspect implements BeanFactoryAware {
 				log = LoggerFactory.getLogger(externalResourceSLI.logScope());
 			}
 		}
-		String ait;
-		try { 
-			ait = parser.parseExpression(externalResourceSLI.ait()).getValue(context, String.class);
-		} catch (Throwable thrown) {
-			log.error("Parse error for \"{}\" {}", externalResourceSLI.ait(), thrown.getMessage());
-			ait = externalResourceSLI.ait();
-		}
+		String ait = resolvedLiterals.computeIfAbsent(externalResourceSLI.ait(), this::resolveLiteral);
 		long start = System.nanoTime();
 		Object proceed=null;
 		try {
@@ -51,6 +50,17 @@ public class ExternalResourceSLIAspect implements BeanFactoryAware {
 		}
 		ServiceLevelIndicator.logServiceElapsedTime(log, externalResourceSLI.value(), ait, (System.nanoTime() - start) );
 		return proceed;
+	}
+
+	private String resolveLiteral( String literal ) {
+		String resolved;
+		try {
+			resolved = parser.parseExpression(literal,tcontext).getValue(context, String.class);
+		} catch (Throwable thrown ) {
+			resolved = literal;
+			log.error("Parse error for \"{}\" {}", literal, thrown.getMessage());
+		}
+		return resolved;
 	}
 
 	@Override

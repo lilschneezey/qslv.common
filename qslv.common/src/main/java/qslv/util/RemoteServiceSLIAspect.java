@@ -1,6 +1,7 @@
 package qslv.util;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.context.expression.BeanFactoryResolver;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,8 @@ public class RemoteServiceSLIAspect implements BeanFactoryAware {
 	Logger log = null;
 	StandardEvaluationContext context;
 	private ExpressionParser parser = new SpelExpressionParser();
+	private TemplateParserContext tcontext = new TemplateParserContext();
+	HashMap<String, String> resolvedLiterals = new HashMap<>();
 	
 	@Around("@annotation(remoteServiceSLI)")
 	public Object remoteService(ProceedingJoinPoint joinPoint, RemoteServiceSLI remoteServiceSLI) throws Throwable {
@@ -36,16 +40,8 @@ public class RemoteServiceSLIAspect implements BeanFactoryAware {
 				log = LoggerFactory.getLogger(remoteServiceSLI.logScope());
 			}
 		}
-		String ait;
-		String remoteAit;
-		try { 
-			ait = parser.parseExpression(remoteServiceSLI.ait()).getValue(context, String.class);
-			remoteAit = parser.parseExpression(remoteServiceSLI.remoteAit()).getValue(context, String.class);
-		} catch (Throwable thrown) {
-			log.error("Parse error for \"{}\" or \"{}\" {}", remoteServiceSLI.ait(), remoteServiceSLI.remoteAit(), thrown.getMessage());
-			ait = remoteServiceSLI.ait();
-			remoteAit = remoteServiceSLI.remoteAit();
-		}
+		String remoteAit = resolvedLiterals.computeIfAbsent(remoteServiceSLI.remoteAit(), this::resolveLiteral);
+		String ait = resolvedLiterals.computeIfAbsent(remoteServiceSLI.ait(), this::resolveLiteral);
 		long start = System.nanoTime();
 		Object proceed=null;
 		try {
@@ -69,6 +65,7 @@ public class RemoteServiceSLIAspect implements BeanFactoryAware {
 		}
 		return proceed;
 	}
+	
 	private Duration analyzeResponse(Object object) {
 		try {
 			if (TimedResponse.class.isAssignableFrom(object.getClass())) {
@@ -89,6 +86,17 @@ public class RemoteServiceSLIAspect implements BeanFactoryAware {
 			log.error(thrown.getLocalizedMessage());
 		}
 		return null;
+	}
+	
+	private String resolveLiteral( String literal ) {
+		String resolved;
+		try {
+			resolved = parser.parseExpression(literal,tcontext).getValue(context, String.class);
+		} catch (Throwable thrown ) {
+			resolved = literal;
+			log.error("Parse error for \"{}\" {}", literal, thrown.getMessage());
+		}
+		return resolved;
 	}
 
 	@Override

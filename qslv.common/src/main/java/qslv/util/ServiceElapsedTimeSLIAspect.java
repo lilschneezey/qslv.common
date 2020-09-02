@@ -1,5 +1,7 @@
 package qslv.util;
 
+import java.util.HashMap;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.context.expression.BeanFactoryResolver;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +26,9 @@ public class ServiceElapsedTimeSLIAspect implements BeanFactoryAware {
 	private Logger log = null;
 	StandardEvaluationContext context;
 	private ExpressionParser parser = new SpelExpressionParser();
-	
+	private TemplateParserContext tcontext = new TemplateParserContext();
+	HashMap<String, String> resolvedLiterals = new HashMap<>();
+
 	@Around("@annotation(serviceElapsedTimeSLI)")
 	public Object logServiceElapsedTimeSLI(ProceedingJoinPoint joinPoint, ServiceElapsedTimeSLI serviceElapsedTimeSLI) throws Throwable {
 		if ( null == log ) {
@@ -33,13 +38,8 @@ public class ServiceElapsedTimeSLIAspect implements BeanFactoryAware {
 				log = LoggerFactory.getLogger(serviceElapsedTimeSLI.logScope());
 			}
 		}
-		String ait;
-		try { 
-			ait = parser.parseExpression(serviceElapsedTimeSLI.ait()).getValue(context, String.class);
-		} catch (Throwable thrown) {
-			log.error("Parse error for \"{}\" {}", serviceElapsedTimeSLI.ait(), thrown.getMessage());
-			ait = serviceElapsedTimeSLI.ait();
-		}
+		String ait = resolvedLiterals.computeIfAbsent(serviceElapsedTimeSLI.ait(), this::resolveLiteral);
+
 		long start = System.nanoTime();
 		Object proceed = joinPoint.proceed();
 		long elapsedTime = System.nanoTime() - start;
@@ -69,6 +69,18 @@ public class ServiceElapsedTimeSLIAspect implements BeanFactoryAware {
 		}
 		return object;
 	}
+	
+	private String resolveLiteral( String literal ) {
+		String resolved;
+		try {
+			resolved = parser.parseExpression(literal,tcontext).getValue(context, String.class);
+		} catch (Throwable thrown ) {
+			resolved = literal;
+			log.error("Parse error for \"{}\" {}", literal, thrown.getMessage());
+		}
+		return resolved;
+	}
+	
 	@Override
 	public void setBeanFactory(BeanFactory beanFactory) throws BeansException {
 		context = new StandardEvaluationContext(beanFactory);

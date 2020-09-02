@@ -1,5 +1,6 @@
 package qslv.util;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.aspectj.lang.JoinPoint;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.context.expression.BeanFactoryResolver;
 import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.common.TemplateParserContext;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
@@ -24,6 +26,8 @@ public class LogRequestTracingDataAspect implements BeanFactoryAware {
 	Logger log = null;
 	StandardEvaluationContext context;
 	private ExpressionParser parser = new SpelExpressionParser();
+	private TemplateParserContext tcontext = new TemplateParserContext();
+	HashMap<String, String> resolvedLiterals = new HashMap<>();
 	
 	@Before("@annotation(logRequestTracingData)")
 	public void logTracingData(JoinPoint joinPoint, LogRequestTracingData logRequestTracingData) throws Throwable {
@@ -34,13 +38,7 @@ public class LogRequestTracingDataAspect implements BeanFactoryAware {
 				log = LoggerFactory.getLogger(logRequestTracingData.logScope());
 			}
 		}
-		String ait;
-		try { 
-			ait = parser.parseExpression(logRequestTracingData.ait()).getValue(context, String.class);
-		} catch (Throwable thrown) {
-			log.error("Parse error for \"{}\" {}", logRequestTracingData.ait(), thrown.getMessage());
-			ait = logRequestTracingData.ait();
-		}
+		String ait = resolvedLiterals.computeIfAbsent(logRequestTracingData.ait(), this::resolveLiteral);
 		for (Object object : joinPoint.getArgs()) {
 			if (TraceableRequest.class.isAssignableFrom(object.getClass()) ) {
 				TraceableRequest<?> request = TraceableRequest.class.cast(object);
@@ -64,6 +62,17 @@ public class LogRequestTracingDataAspect implements BeanFactoryAware {
 				break;
 			}
  		}
+	}
+
+	private String resolveLiteral( String literal ) {
+		String resolved;
+		try {
+			resolved = parser.parseExpression(literal,tcontext).getValue(context, String.class);
+		} catch (Throwable thrown ) {
+			resolved = literal;
+			log.error("Parse error for \"{}\" {}", literal, thrown.getMessage());
+		}
+		return resolved;
 	}
 
 	@Override
